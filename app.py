@@ -738,6 +738,43 @@ def debug_providers():
         except Exception as e:
             output[symbol] = {"error": str(e)}
 
+    # Also test SmartAPI
+    try:
+        import pyotp
+        from dotenv import load_dotenv
+        from SmartApi import SmartConnect
+
+        load_dotenv()
+        smart = SmartConnect(api_key=os.getenv("ANGEL_API_KEY"))
+        session = smart.generateSession(
+            os.getenv("ANGEL_CLIENT_CODE"),
+            os.getenv("ANGEL_PIN"),
+            pyotp.TOTP(os.getenv("ANGEL_TOTP_SECRET")).now()
+        )
+        output["smartapi_login"] = {"status": session.get("status"), "message": session.get("message", "")}
+
+        # Test LTP (simple, always works)
+        ltp = smart.ltpData("NSE", "NIFTY", "99926000")
+        output["smartapi_ltp"] = ltp
+
+        # Test historical candles
+        from datetime import datetime as dt, timedelta
+        params = {
+            "exchange": "NSE",
+            "symboltoken": "99926000",
+            "interval": "FIVE_MINUTE",
+            "fromdate": (dt.now() - timedelta(days=5)).strftime("%Y-%m-%d 09:15"),
+            "todate": dt.now().strftime("%Y-%m-%d 15:30"),
+        }
+        hist = smart.getCandleData(params)
+        output["smartapi_candles"] = {
+            "status": hist.get("status") if hist else False,
+            "message": hist.get("message", "") if hist else "null response",
+            "rows": len(hist.get("data", [])) if hist and hist.get("data") else 0,
+        }
+    except Exception as e:
+        output["smartapi_error"] = str(e)
+
     output["_meta"] = {
         "timestamp": datetime.now().isoformat(),
         "python": platform.python_version(),
